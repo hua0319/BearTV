@@ -15,7 +15,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
 
-public class CustomKeyDownLive extends GestureDetector.SimpleOnGestureListener {
+public class CustomKeyDownLive extends GestureDetector.SimpleOnGestureListener implements ScaleGestureDetector.OnScaleGestureListener {
 
     private static final int DISTANCE = 250;
     private static final int VELOCITY = 10;
@@ -46,7 +46,7 @@ public class CustomKeyDownLive extends GestureDetector.SimpleOnGestureListener {
 
     private CustomKeyDownLive(Activity activity, View videoView) {
         this.manager = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
-        this.scaleDetector = new ScaleGestureDetector(activity, new ScaleListener());
+        this.scaleDetector = new ScaleGestureDetector(activity, this);
         this.detector = new GestureDetector(activity, this);
         this.listener = (Listener) activity;
         this.videoView = videoView;
@@ -63,15 +63,20 @@ public class CustomKeyDownLive extends GestureDetector.SimpleOnGestureListener {
     }
 
     public void resetScale() {
-        scale = 1.0f;
-        videoView.setScaleX(1.0f);
-        videoView.setScaleY(1.0f);
-        videoView.setPivotX(videoView.getWidth() / 2f);
-        videoView.setPivotY(videoView.getHeight() / 2f);
+        if (scale == 1.0f) return;
+        videoView.animate().scaleX(1.0f).scaleY(1.0f).translationX(0f).translationY(0f).setDuration(250).withEndAction(() -> {
+            videoView.setPivotY(videoView.getHeight() / 2f);
+            videoView.setPivotX(videoView.getWidth() / 2f);
+            scale = 1.0f;
+        }).start();
     }
 
     public void setLock(boolean lock) {
         this.lock = lock;
+    }
+
+    public float getScale() {
+        return scale;
     }
 
     private boolean isEdge(MotionEvent e) {
@@ -189,29 +194,26 @@ public class CustomKeyDownLive extends GestureDetector.SimpleOnGestureListener {
         listener.onVolume((int) (index / maxVolume * 100));
     }
 
-    private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
-        @Override
-        public boolean onScaleBegin(@NonNull ScaleGestureDetector detector) {
-            if (changeBright || changeVolume || changeSpeed || changeTime || lock) return false;
-            return changeScale = true;
-        }
+    @Override
+    public boolean onScaleBegin(@NonNull ScaleGestureDetector detector) {
+        if (changeBright || changeVolume || changeSpeed || changeTime || lock) return changeScale = false;
+        return changeScale = true;
+    }
 
-        @Override
-        public void onScaleEnd(@NonNull ScaleGestureDetector detector) {
-            App.post(() -> changeScale = false, 250);
-        }
+    @Override
+    public void onScaleEnd(@NonNull ScaleGestureDetector detector) {
+        App.post(() -> changeScale = false, 500);
+    }
 
-        @Override
-        public boolean onScale(@NonNull ScaleGestureDetector detector) {
-            if (!changeScale) return false;
-            scale *= detector.getScaleFactor();
-            scale = Math.max(1.0f, Math.min(scale, 5.0f));
-            videoView.setPivotX(detector.getFocusX());
-            videoView.setPivotY(detector.getFocusY());
-            videoView.setScaleX(scale);
-            videoView.setScaleY(scale);
-            return true;
-        }
+    @Override
+    public boolean onScale(@NonNull ScaleGestureDetector detector) {
+        scale *= detector.getScaleFactor();
+        scale = Math.max(1.0f, Math.min(scale, 5.0f));
+        videoView.setPivotX(detector.getFocusX());
+        videoView.setPivotY(detector.getFocusY());
+        videoView.setScaleX(scale);
+        videoView.setScaleY(scale);
+        return true;
     }
 
     public interface Listener {
